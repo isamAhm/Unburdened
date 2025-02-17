@@ -1,9 +1,7 @@
-import React from 'react';
+import React from "react";
 
-function useHandleStreamResponse({
-  onChunk,
-  onFinish
-}) {
+//some comments
+function useHandleStreamResponse({ onChunk, onFinish }) {
   const handleStreamResponse = React.useCallback(
     async (response) => {
       if (response.body) {
@@ -40,31 +38,31 @@ function useUpload() {
         formData.append("file", input.file);
         response = await fetch(`${window.location.origin}/api/upload`, {
           method: "POST",
-          body: formData
+          body: formData,
         });
       } else if ("url" in input) {
         response = await fetch(`${window.location.origin}/api/upload`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ url: input.url })
+          body: JSON.stringify({ url: input.url }),
         });
       } else if ("base64" in input) {
         response = await fetch(`${window.location.origin}/api/upload`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ base64: input.base64 })
+          body: JSON.stringify({ base64: input.base64 }),
         });
       } else {
         response = await fetch(`${window.location.origin}/api/upload`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/octet-stream"
+            "Content-Type": "application/octet-stream",
           },
-          body: input.buffer
+          body: input.buffer,
         });
       }
       if (!response.ok) {
@@ -91,7 +89,4 @@ function useUpload() {
   return [upload, { loading }];
 }
 
-export {
-  useHandleStreamResponse,
-  useUpload,
-}
+export { useHandleStreamResponse, useUpload };

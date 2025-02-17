@@ -3,6 +3,8 @@ import React from "react";
 import { useState, useCallback, useEffect } from "react";
 
 
+//planning to finish this project tomorrow i'll just push something like comments for today for my github streak today- feb-17
+
 
 function MainComponent() {
   const [posts, setPosts] = useState([]);

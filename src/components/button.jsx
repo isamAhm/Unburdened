@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 
+// some comments
 function Button({ text, keyboardCommand, onClick }) {
   return (
     <button
