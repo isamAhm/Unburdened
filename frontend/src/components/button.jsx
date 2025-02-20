@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 
-// some comments
+// some comments reusable component
 function Button({ text, keyboardCommand, onClick }) {
   return (
     <button
