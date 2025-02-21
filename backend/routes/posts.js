@@ -2,6 +2,7 @@ const express = require("express");
 const db = require("../db");
 const router = express.Router();
 
+//connected to the db in the backend
 // Fetch all posts
 router.get("/", async (req, res) => {
   try {
