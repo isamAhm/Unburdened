@@ -1,0 +1,16 @@
+{
+  "name": "Unburdened",
+  "short_name": "Unburdened",
+  "description": "Share your confessions anonymously",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#151515",
+  "theme_color": "#1E1E1E",
+  "icons": [
+    {
+      "src": "/unburdened.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

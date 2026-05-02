@@ -21,8 +21,6 @@ Visit `http://localhost:3000` and test:
 
 ---
 
-## 2. Deploy to Vercel (10 minutes)
-
 ### Option A: Via Vercel Dashboard (Easiest)
 
 1. Go to [vercel.com](https://vercel.com) and sign in

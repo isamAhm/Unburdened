@@ -14,6 +14,7 @@ export const metadata = {
     shortcut: "/unburdened2.png",
     apple: "/unburdened2.png",
   },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }) {
