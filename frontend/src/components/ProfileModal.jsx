@@ -2,8 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { profileAPI } from "../api/profile";
-import { postsAPI } from "../api/posts";
+import { profileAPI } from "../api/profile-appwrite";
+import { postsAPI } from "../api/posts-appwrite";
+import ConfirmModal from "./ConfirmModal";
 import toast from "react-hot-toast";
 
 const initialEditState = {
@@ -22,6 +23,7 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
   const [editStates, setEditStates] = useState({});
   const [showConfessionsModal, setShowConfessionsModal] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const hasProfileChanges = useMemo(() => {
     if (!profile || !user) return false;
@@ -44,9 +46,7 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
       });
     } catch (error) {
       console.error("Failed to fetch profile info:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to load profile information"
-      );
+      toast.error(error.message || "Failed to load profile information");
     }
   };
 
@@ -62,9 +62,7 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
       setSavedPosts(savedData || []);
     } catch (error) {
       console.error("Failed to fetch posts data:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to load posts"
-      );
+      toast.error(error.message || "Failed to load posts");
     } finally {
       setLoadingPosts(false);
     }
@@ -117,7 +115,7 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
       toast.success("Profile image updated");
     } catch (error) {
       console.error("Avatar upload failed:", error);
-      toast.error(error.response?.data?.error || "Failed to upload avatar");
+      toast.error(error.message || "Failed to upload avatar");
     } finally {
       setAvatarUploading(false);
       event.target.value = "";
@@ -143,7 +141,7 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
       toast.success("Profile updated");
     } catch (error) {
       console.error("Profile update failed:", error);
-      toast.error(error.response?.data?.error || "Failed to update profile");
+      toast.error(error.message || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -199,21 +197,23 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
   };
 
   const handleDeletePost = async (postId) => {
-    if (!confirm("Are you sure you want to delete this post?")) {
-      return;
-    }
+    setConfirmDelete(postId);
+  };
+
+  const executeDeletePost = async () => {
+    if (!confirmDelete) return;
 
     try {
-      await postsAPI.deletePost(postId);
+      await postsAPI.deletePost(confirmDelete);
       // Optimistic update - remove from local state immediately
-      setPosts((prev) => prev.filter((post) => post.$id !== postId && post.id !== postId));
+      setPosts((prev) => prev.filter((post) => post.$id !== confirmDelete && post.id !== confirmDelete));
       toast.success("Post deleted");
       if (typeof onPostsUpdated === "function") {
         await onPostsUpdated();
       }
     } catch (error) {
       console.error("Failed to delete post:", error);
-      toast.error(error.response?.data?.error || "Failed to delete post");
+      toast.error(error.message || "Failed to delete post");
       // Refetch on error to restore correct state
       await fetchPostsData();
     }
@@ -520,6 +520,18 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={executeDeletePost}
+        title="Delete Post"
+        message="Are you sure you want to delete this post? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous={true}
+      />
     </>
   );
 };

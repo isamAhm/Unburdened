@@ -1,11 +1,12 @@
 "use client";
 import React from "react";
 import { useState, useCallback, useEffect } from "react";
-import { postsAPI } from "../api/posts";
+import { postsAPI } from "../api/posts-appwrite";
 import { moderationAPI } from "../api/moderation";
 import { useAuth } from "../contexts/AuthContext";
 import AuthModal from "../components/AuthModal";
 import ProfileModal from "../components/ProfileModal";
+import ConfirmModal from "../components/ConfirmModal";
 import toast from "react-hot-toast";
 
 const MOOD_OPTIONS = [
@@ -67,6 +68,7 @@ function MainComponent() {
   const [selectedMood, setSelectedMood] = useState(MOOD_OPTIONS[0].value);
   const [filterMood, setFilterMood] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState("grid"); // 'grid' or 'list'
   const [loading, setLoading] = useState(true);
   const [userLikes, setUserLikes] = useState({});
   const [userSaves, setUserSaves] = useState({});
@@ -77,6 +79,8 @@ function MainComponent() {
   const [commentDrafts, setCommentDrafts] = useState({});
   const [commentTargets, setCommentTargets] = useState({});
   const [loadingComments, setLoadingComments] = useState({});
+  const [activeCommentModal, setActiveCommentModal] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [error, setError] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -331,14 +335,14 @@ function MainComponent() {
 
   const toggleComments = useCallback(
     async (postId) => {
-      const nextVisible = !commentsVisible[postId];
-      setCommentsVisible((prev) => ({ ...prev, [postId]: nextVisible }));
+      // Open modal and fetch comments
+      setActiveCommentModal(postId);
 
-      if (nextVisible && !commentsByPost[postId]) {
+      if (!commentsByPost[postId]) {
         await fetchCommentsForPost(postId);
       }
     },
-    [commentsByPost, commentsVisible, fetchCommentsForPost]
+    [commentsByPost, fetchCommentsForPost]
   );
 
   const handleCommentSubmit = useCallback(
@@ -374,11 +378,48 @@ function MainComponent() {
         toast.success("Comment added");
       } catch (error) {
         console.error("Error adding comment:", error);
-        const errorMsg = error.response?.data?.error || error.message || "Failed to add comment";
+        const errorMsg = error.message || "Failed to add comment";
         toast.error(errorMsg);
       }
     },
     [commentDrafts, commentTargets, fetchCommentsForPost, isAuthenticated]
+  );
+
+  const handleDeleteComment = useCallback(
+    async (postId, commentId) => {
+      // Set the confirmation state instead of using confirm()
+      setConfirmDelete({ postId, commentId });
+    },
+    []
+  );
+
+  const executeDeleteComment = useCallback(
+    async () => {
+      if (!confirmDelete) return;
+
+      const { postId, commentId } = confirmDelete;
+
+      try {
+        await postsAPI.deleteComment(commentId, postId);
+        setPosts((prevPosts) =>
+          prevPosts.map((post) =>
+            post.id === postId
+              ? {
+                ...post,
+                commentsCount: Math.max(0, (post.commentsCount || 0) - 1),
+              }
+              : post
+          )
+        );
+        await fetchCommentsForPost(postId);
+        toast.success("Comment deleted");
+      } catch (error) {
+        console.error("Error deleting comment:", error);
+        const errorMsg = error.message || "Failed to delete comment";
+        toast.error(errorMsg);
+      }
+    },
+    [confirmDelete, fetchCommentsForPost]
   );
 
   const handleReplySelect = useCallback((postId, comment) => {
@@ -445,15 +486,26 @@ function MainComponent() {
           <p className="text-sm text-white mt-1 whitespace-pre-line">
             {comment.content}
           </p>
-          {isAuthenticated && (
-            <button
-              onClick={() => handleReplySelect(postId, comment)}
-              className="mt-1 text-xs text-[#A4A4A4] hover:text-white flex items-center gap-1"
-            >
-              <i className="far fa-comment-dots"></i>
-              Reply
-            </button>
-          )}
+          <div className="flex items-center gap-3 mt-1">
+            {isAuthenticated && (
+              <button
+                onClick={() => handleReplySelect(postId, comment)}
+                className="text-xs text-[#A4A4A4] hover:text-white flex items-center gap-1"
+              >
+                <i className="far fa-comment-dots"></i>
+                Reply
+              </button>
+            )}
+            {user && comment.userId === user.id && (
+              <button
+                onClick={() => handleDeleteComment(postId, comment.id)}
+                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+              >
+                <i className="far fa-trash-alt"></i>
+                Delete
+              </button>
+            )}
+          </div>
           {comment.children?.length
             ? renderCommentNodes(postId, comment.children, depth + 1)
             : null}
@@ -466,11 +518,9 @@ function MainComponent() {
     const comments = commentsByPost[postId] || [];
     const tree = buildCommentTree(comments);
     const isLoading = loadingComments[postId];
-    const draft = commentDrafts[postId] || "";
-    const replyTarget = commentTargets[postId];
 
     return (
-      <div className="mt-3 pt-3 border-t border-[#2A2A2A]">
+      <div>
         {isLoading ? (
           <div className="text-xs text-[#A4A4A4]">Loading comments...</div>
         ) : tree.length ? (
@@ -478,9 +528,18 @@ function MainComponent() {
         ) : (
           <p className="text-xs text-[#4A4A4A]">Be the first to comment</p>
         )}
+      </div>
+    );
+  };
 
+  const renderCommentInput = (postId) => {
+    const draft = commentDrafts[postId] || "";
+    const replyTarget = commentTargets[postId];
+
+    return (
+      <div className="border-t border-[#2A2A2A] bg-[#1E1E1E]/20 p-4 sm:p-6">
         {isAuthenticated ? (
-          <div className="mt-3">
+          <div>
             {replyTarget ? (
               <div className="text-xs text-[#A4A4A4] mb-2 flex items-center justify-between">
                 <span>
@@ -512,7 +571,8 @@ function MainComponent() {
               }
               maxLength={500}
               placeholder="Share your thoughts..."
-              className="w-full bg-[#151515] text-white rounded p-2 text-sm border border-[#2A2A2A] focus:outline-none"
+              className="w-full bg-[#1e1e1e]/70 backdrop-blur-lg text-white rounded p-2 text-sm border border-[#2A2A2A] focus:outline-none resize-none"
+              rows={3}
             />
             <div className="flex justify-between items-center mt-2">
               <span className="text-[11px] text-[#4A4A4A]">
@@ -529,7 +589,7 @@ function MainComponent() {
           </div>
         ) : (
           <button
-            className="mt-3 text-xs text-[#A4A4A4] hover:text-white flex items-center gap-1"
+            className="text-xs text-[#A4A4A4] hover:text-white flex items-center gap-1"
             onClick={() => setShowAuthModal(true)}
           >
             <i className="fas fa-lock"></i>
@@ -586,7 +646,7 @@ function MainComponent() {
           <textarea
             value={newPost}
             onChange={(e) => setNewPost(e.target.value)}
-            maxLength={150}
+            maxLength={1000}
             placeholder={isAuthenticated ? "Confess something..." : "Login to share your confessions..."}
             disabled={!isAuthenticated}
             className="w-full bg-[#151515] text-white rounded p-3 mb-3 resize-none h-24 focus:outline-none border border-[#2A2A2A] placeholder:text-[#A4A4A4] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -617,7 +677,7 @@ function MainComponent() {
             {error && <p className="text-red-500 text-xs">{error}</p>}
             <div className="flex justify-between items-center">
               <span className="text-xs text-[#A4A4A4]">
-                {150 - newPost.length} left
+                {1000 - newPost.length} left
               </span>
               <button
                 onClick={addPost}
@@ -637,14 +697,40 @@ function MainComponent() {
         ) : (
           <>
             <div className="sticky top-0 z-10 bg-[#151515] pb-4 mb-6">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-3 mb-3 hover:text-white transition-colors w-full"
-              >
-                <i className="fas fa-filter text-[#A4A4A4] text-sm"></i>
-                <span className="text-xs text-[#A4A4A4] uppercase tracking-wide">Filter by mood</span>
-                <i className={`fas fa-chevron-${showFilters ? 'up' : 'down'} text-[#A4A4A4] text-xs transition-transform`}></i>
-              </button>
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="flex items-center gap-3 hover:text-white transition-colors"
+                >
+                  <i className="fas fa-filter text-[#A4A4A4] text-sm"></i>
+                  <span className="text-xs text-[#A4A4A4] uppercase tracking-wide">Filter by mood</span>
+                  <i className={`fas fa-chevron-${showFilters ? 'up' : 'down'} text-[#A4A4A4] text-xs transition-transform`}></i>
+                </button>
+
+                {/* View Toggle */}
+                <div className="flex items-center gap-2 bg-[#2A2A2A] rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors ${viewMode === "grid"
+                      ? "bg-white text-[#151515]"
+                      : "text-[#A4A4A4] hover:text-white"
+                      }`}
+                    title="Grid view"
+                  >
+                    <i className="fas fa-th"></i>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors ${viewMode === "list"
+                      ? "bg-white text-[#151515]"
+                      : "text-[#A4A4A4] hover:text-white"
+                      }`}
+                    title="List view"
+                  >
+                    <i className="fas fa-list"></i>
+                  </button>
+                </div>
+              </div>
               {showFilters && (
                 <div className="relative">
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -680,34 +766,41 @@ function MainComponent() {
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className={viewMode === "grid" ? "grid grid-cols-2 md:grid-cols-3 gap-4" : "flex flex-col gap-4"}>
               {(posts || [])
                 .filter((post) => filterMood === "all" || post.mood === filterMood)
                 .map((post) => (
                   <div
                     key={post.id}
-                    className="bg-[#1E1E1E] rounded-lg p-4 shadow-lg border border-[#2A2A2A] flex flex-col justify-between h-full"
+                    className={`bg-[#1E1E1E] rounded-lg p-4 shadow-lg border border-[#2A2A2A] cursor-pointer hover:border-[#3A3A3A] transition-colors ${viewMode === "grid" ? "flex flex-col justify-between h-full" : "flex flex-col"
+                      }`}
+                    onClick={() => toggleComments(post.id)}
                   >
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-2 text-xs text-[#A4A4A4] uppercase tracking-wide">
-                        <i className={`fas ${MOOD_METADATA[post.mood]?.icon || "fa-circle"}`}></i>
-                        <span>{MOOD_METADATA[post.mood]?.label || "Mood"}</span>
-                        {user && post.userId === user.id && (
-                          <span className="ml-1 px-1 py-0.5 bg-blue-800/10 backdrop-blur-md text-blue-600 text-[8px] rounded-md">
-                            you
-                          </span>
-                        )}
+                    <div className={viewMode === "list" ? "flex gap-4" : ""}>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex items-center gap-2 text-xs text-[#A4A4A4] uppercase tracking-wide">
+                            <i className={`fas ${MOOD_METADATA[post.mood]?.icon || "fa-circle"}`}></i>
+                            <span>{MOOD_METADATA[post.mood]?.label || "Mood"}</span>
+                            {user && post.userId === user.id && (
+                              <span className="ml-1 px-1 py-0.5 bg-blue-800/10 backdrop-blur-md text-blue-600 text-[8px] rounded-md">
+                                you
+                              </span>
+                            )}
+                          </div>
+                          {post.$createdAt ? (
+                            <span className="text-[10px] text-[#4A4A4A]">
+                              {new Date(post.$createdAt).toLocaleDateString()}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className={`text-white text-sm mb-3 break-words ${viewMode === "grid" ? "line-clamp-6 max-h-[120px] overflow-hidden" : "line-clamp-3"
+                          }`}>
+                          {post.content}
+                        </p>
                       </div>
-                      {post.$createdAt ? (
-                        <span className="text-[10px] text-[#4A4A4A]">
-                          {new Date(post.$createdAt).toLocaleDateString()}
-                        </span>
-                      ) : null}
                     </div>
-                    <p className="text-white text-sm mb-3 break-words">
-                      {post.content}
-                    </p>
-                    <div className="flex gap-4 justify-end">
+                    <div className="flex gap-4 justify-end" onClick={(e) => e.stopPropagation()}>
                       <LikeButton
                         liked={!!userLikes[post.id]}
                         count={post.likes || 0}
@@ -724,8 +817,7 @@ function MainComponent() {
                       </button>
                       <button
                         onClick={() => toggleComments(post.id)}
-                        className={`text-[#A4A4A4] hover:text-white text-sm flex items-center gap-1.5 transition-colors ${commentsVisible[post.id] ? "text-white" : ""
-                          }`}
+                        className="text-[#A4A4A4] hover:text-white text-sm flex items-center gap-1.5 transition-colors"
                       >
                         <i className="far fa-comment-dots"></i>
                         <span>
@@ -735,7 +827,6 @@ function MainComponent() {
                         </span>
                       </button>
                     </div>
-                    {commentsVisible[post.id] ? renderCommentSection(post.id) : null}
                   </div>
                 ))}
             </div>
@@ -754,6 +845,93 @@ function MainComponent() {
           await fetchPosts();
           await refreshSavedState();
         }}
+      />
+
+      {/* Comments Modal */}
+      {activeCommentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-black/20 backdrop-blur-md rounded-lg w-full max-w-2xl max-h-[90vh] border border-[#2A2A2A] shadow-xl flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-4 sm:p-6 border-[#2A2A2A] flex-shrink-0">
+              <div>
+                <h2 className="text-lg sm:text-xl font-medium text-white">Comments</h2>
+                <p className="text-xs sm:text-sm text-[#A4A4A4]">
+                  {commentsByPost[activeCommentModal]?.length || 0} comments
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveCommentModal(null);
+                  setCommentTargets((prev) => ({ ...prev, [activeCommentModal]: null }));
+                }}
+                className="text-[#A4A4A4] hover:text-white transition-colors text-xl"
+                aria-label="Close comments"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            {/* Post Content */}
+            <div className="p-4 sm:p-6 border-b-2 border-[#2A2A2A] rounded-xl flex-shrink-0">
+              {/* <div className="flex items-center gap-2 mb-3">
+                <i className="fas fa-comment-alt text-[#A4A4A4] text-xs"></i>
+                <span className="text-xs text-[#A4A4A4] uppercase tracking-wide font-medium">Original Post</span>
+              </div> */}
+              {(() => {
+                const post = posts.find((p) => p.id === activeCommentModal);
+                if (!post) return null;
+                return (
+                  <div className="bg-[#1E1E1E]/70 rounded-lg p-4 border border-[#2A2A2A]">
+                    <div className="flex items-center gap-2 text-xs text-[#A4A4A4] uppercase tracking-wide mb-2">
+                      <i className={`fas ${MOOD_METADATA[post.mood]?.icon || "fa-circle"}`}></i>
+                      <span>{MOOD_METADATA[post.mood]?.label || "Mood"}</span>
+                      {user && post.userId === user.id && (
+                        <span className="ml-1 px-1 py-0.5 bg-blue-800/10 backdrop-blur-md text-blue-600 text-[8px] rounded-md">
+                          you
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-white text-sm whitespace-pre-wrap break-words">
+                      {post.content}
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Comments Section Label */}
+            <div className="px-4 sm:px-6 pt-4 pb-2 bg-black/20 backdrop-blur-md flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <i className="fas fa-comments text-[#A4A4A4] text-xs"></i>
+                <span className="text-xs text-[#A4A4A4] uppercase tracking-wide font-medium">
+                  Comments ({commentsByPost[activeCommentModal]?.length || 0})
+                </span>
+              </div>
+            </div>
+
+            {/* Comments List - Scrollable */}
+            <div className="px-4 sm:px-6 pb-4 overflow-y-auto flex-1 min-h-0 bg-black/20 backdrop-blur-md">
+              {renderCommentSection(activeCommentModal)}
+            </div>
+
+            {/* Comment Input - Fixed at Bottom */}
+            <div className="flex-shrink-0">
+              {renderCommentInput(activeCommentModal)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={executeDeleteComment}
+        title="Delete Comment"
+        message="Are you sure you want to delete this comment? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous={true}
       />
     </div>
   );
