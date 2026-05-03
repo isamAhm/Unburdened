@@ -642,6 +642,8 @@ function MainComponent() {
             </div>
           </div>
         </div>
+
+
         <div className="bg-[#1E1E1E] rounded-lg p-4 mb-8 border border-[#2A2A2A]">
           <textarea
             value={newPost}

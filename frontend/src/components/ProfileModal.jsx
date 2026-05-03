@@ -13,7 +13,7 @@ const initialEditState = {
 };
 
 const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, changePassword } = useAuth();
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [savedPosts, setSavedPosts] = useState([]);
@@ -24,6 +24,16 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
   const [showConfessionsModal, setShowConfessionsModal] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  // Password change state
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const hasProfileChanges = useMemo(() => {
     if (!profile || !user) return false;
@@ -68,7 +78,7 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
     }
   };
 
-  // Initial load when modal opens
+  // Initial load when modal opens and state cleanup when it closes
   useEffect(() => {
     if (isOpen) {
       // Fetch profile info only if not already loaded
@@ -77,6 +87,15 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
       }
       // Always fetch posts data to get latest
       fetchPostsData();
+    } else {
+      // Security best practice: clear sensitive data when modal closes
+      setShowPasswordForm(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -146,6 +165,29 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
       setSaving(false);
     }
   };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+
+    setPasswordLoading(true);
+    const result = await changePassword(currentPassword, newPassword);
+    if (result.success) {
+      setShowPasswordForm(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+    setPasswordLoading(false);
+  };
+
 
   const toggleEditPost = (postId, content) => {
     setEditStates((prev) => ({
@@ -347,13 +389,100 @@ const ProfileModal = ({ isOpen, onClose, onPostsUpdated }) => {
                     Your Confessions ({posts.length})
                   </button>
                 </div>
-                <div className="flex justify-end w-full">
+
+                <div className="border-t border-[#2A2A2A] pt-4 mt-2">
+                  <button
+                    onClick={() => setShowPasswordForm(!showPasswordForm)}
+                    className="text-sm text-[#A4A4A4] hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <i className={`fas fa-chevron-${showPasswordForm ? 'up' : 'down'}`}></i>
+                    Change Password
+                  </button>
+
+                  {showPasswordForm && (
+                    <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-3 bg-[#151515] p-4 rounded-lg border border-[#2A2A2A]">
+                      <div>
+                        <label className="block text-xs text-[#A4A4A4] mb-1">Current Password</label>
+                        <div className="relative">
+                          <input
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            className="w-full bg-[#1E1E1E] text-white rounded p-2 pr-10 border border-[#2A2A2A] focus:outline-none focus:border-[#4A4A4A] text-sm"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A4A4] hover:text-white transition-colors"
+                            tabIndex="-1"
+                          >
+                            <i className={`fas ${showCurrentPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#A4A4A4] mb-1">New Password</label>
+                        <div className="relative">
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="w-full bg-[#1E1E1E] text-white rounded p-2 pr-10 border border-[#2A2A2A] focus:outline-none focus:border-[#4A4A4A] text-sm"
+                            required
+                            minLength={8}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A4A4] hover:text-white transition-colors"
+                            tabIndex="-1"
+                          >
+                            <i className={`fas ${showNewPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#A4A4A4] mb-1">Confirm New Password</label>
+                        <div className="relative">
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full bg-[#1E1E1E] text-white rounded p-2 pr-10 border border-[#2A2A2A] focus:outline-none focus:border-[#4A4A4A] text-sm"
+                            required
+                            minLength={8}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A4A4] hover:text-white transition-colors"
+                            tabIndex="-1"
+                          >
+                            <i className={`fas ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          disabled={passwordLoading}
+                          className="bg-[#2A2A2A] text-white px-4 py-2 rounded text-sm hover:bg-[#353535] disabled:opacity-50 transition-colors"
+                        >
+                          {passwordLoading ? "Updating..." : "Update Password"}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                <div className="flex justify-end w-full pt-4 border-t border-[#2A2A2A]">
                   <button
                     onClick={handleProfileSave}
                     disabled={saving || !hasProfileChanges}
-                    className="bg-[#2A2A2A] text-white px-4 py-2 rounded text-sm hover:bg-[#353535] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="bg-[#2A2A2A] text-white px-6 py-2 rounded text-sm hover:bg-[#353535] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {saving ? "Saving..." : "Save profile"}
+                    {saving ? "Saving..." : "Save profile details"}
                   </button>
                 </div>
               </div>
