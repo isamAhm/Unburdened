@@ -10,9 +10,9 @@ export const metadata = {
   title: "Unburdened",
   description: "anonymous confessions",
   icons: {
-    icon: "/unburdened2.png",
-    shortcut: "/unburdened2.png",
-    apple: "/unburdened2.png",
+    icon: "/unburdened.png",
+    shortcut: "/unburdened.png",
+    apple: "/unburdened.png",
   },
   manifest: "/manifest.json",
 };
